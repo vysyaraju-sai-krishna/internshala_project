@@ -8,26 +8,30 @@ from shap_e.diffusion.gaussian_diffusion import diffusion_from_config
 from shap_e.models.download import load_model
 from shap_e.util.rendering import create_pan_cameras, render_mesh
 
-st.set_page_config(page_title="Shap-E: Text to 3D Generator", layout="centered")
-st.title("🧠 Shap-E: Text to 3D Generator")
+# Set up Streamlit page
+st.set_page_config(page_title="Shap-E 3D Generator", layout="centered")
+st.title("🧠 Shap-E: Text to 3D Model Generator")
 
+# Use GPU if available
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+# Load model and diffusion (cached)
 @st.cache_resource
 def load_models():
-    st.info("Loading models...")
+    st.info("Loading Shap-E models...")
     xm = load_model('text300M', device)
     diffusion = diffusion_from_config('text300M')
     return xm, diffusion
 
 xm, diffusion_model = load_models()
 
-prompt = st.text_input("🔤 Enter your 3D prompt:", value="a chair shaped like an avocado")
+# User input
+prompt = st.text_input("🔤 Enter a text prompt to generate a 3D model:", "a cute robot")
 
 if st.button("🚀 Generate 3D Model"):
-    with st.spinner("Generating 3D model... Please wait ⏳"):
+    with st.spinner("Generating 3D model from text..."):
         try:
-            # Step 1: Generate latent
+            # Step 1: Sample latent representation
             latents = sample_latents(
                 batch_size=1,
                 model=diffusion_model,
@@ -49,17 +53,17 @@ if st.button("🚀 Generate 3D Model"):
 
                 st.success("✅ 3D model generated!")
 
-                # Download buttons
-                st.download_button("⬇️ Download OBJ", open(obj_path, "rb"), "model.obj")
-                st.download_button("⬇️ Download STL", open(stl_path, "rb"), "model.stl")
+                # Download links
+                st.download_button("⬇️ Download .OBJ", open(obj_path, "rb"), "model.obj")
+                st.download_button("⬇️ Download .STL", open(stl_path, "rb"), "model.stl")
 
-                # Step 2: Render previews
-                st.subheader("🖼️ Preview Images")
+                # Step 2: Render preview images
+                st.subheader("🖼️ 3D Model Preview")
                 cameras = create_pan_cameras()
                 images = render_mesh(mesh, cameras=cameras, resolution=256)
 
                 for i, img in enumerate(images[:3]):
-                    st.image(img, caption=f"View {i+1}", use_column_width=True)
+                    st.image(img, caption=f"View {i + 1}", use_column_width=True)
 
         except Exception as e:
             st.error(f"❌ Error: {e}")
