@@ -1,69 +1,80 @@
 import streamlit as st
-import torch
+import trimesh
+import pyrender
+import numpy as np
 import os
-import tempfile
+import uuid
 
-from shap_e.diffusion.sample import sample_latents
-from shap_e.diffusion.gaussian_diffusion import diffusion_from_config
-from shap_e.models.download import load_model
-from shap_e.util.rendering import create_pan_cameras, render_mesh
+# Function to generate a 3D model from text prompt (mock point cloud)
+def text_to_3d(prompt):
+    # Mock implementation: create a cube or sphere based on keywords
+    if "car" in prompt.lower():
+        # Create a simple box (mock car shape)
+        mesh = trimesh.creation.box(extents=[0.5, 0.3, 0.2])
+    elif "chair" in prompt.lower():
+        # Create a simple chair-like shape
+        mesh = trimesh.creation.box(extents=[0.3, 0.3, 0.5])
+    elif "toy" in prompt.lower():
+        # Create a simple toy-like shape
+        mesh = trimesh.creation.icosphere(radius=0.2)
+    else:
+        # Default to a sphere
+        mesh = trimesh.creation.icosphere(radius=0.3)
+    return mesh
 
-# Set up Streamlit page
-st.set_page_config(page_title="Shap-E 3D Generator", layout="centered")
-st.title("🧠 Shap-E: Text to 3D Model Generator")
+# Function to visualize and save 3D model
+def visualize_and_save(mesh, output_format="obj"):
+    # Save mesh to file
+    output_file = f"model_{uuid.uuid4()}.{output_format}"
+    mesh.export(output_file)
+    
+    # Visualize using pyrender
+    scene = pyrender.Scene()
+    mesh_pyrender = pyrender.Mesh.from_trimesh(mesh)
+    scene.add(mesh_pyrender)
+    
+    # Set up camera and lighting
+    camera = pyrender.PerspectiveCamera(yfov=np.pi / 3.0)
+    camera_pose = np.array([
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 2],
+        [0, 0, 0, 1]
+    ])
+    scene.add(camera, pose=camera_pose)
+    light = pyrender.DirectionalLight(color=np.ones(3), intensity=3.0)
+    scene.add(light)
+    
+    # Render
+    r = pyrender.OffscreenRenderer(400, 400)
+    color, _ = r.render(scene)
+    r.delete()
+    
+    return output_file, color
 
-# Use GPU if available
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# Streamlit app
+st.title("Text to 3D Model Generator")
+st.write("Enter a text prompt to generate a 3D model (e.g., 'A small toy car').")
 
-# Load model and diffusion (cached)
-@st.cache_resource
-def load_models():
-    st.info("Loading Shap-E models...")
-    xm = load_model('text300M', device)
-    diffusion = diffusion_from_config('text300M')
-    return xm, diffusion
-
-xm, diffusion_model = load_models()
-
-# User input
-prompt = st.text_input("🔤 Enter a text prompt to generate a 3D model:", "a cute robot")
-
-if st.button("🚀 Generate 3D Model"):
+# Text input
+text_prompt = st.text_input("Enter a text prompt")
+if text_prompt and st.button("Generate 3D Model"):
     with st.spinner("Generating 3D model from text..."):
-        try:
-            # Step 1: Sample latent representation
-            latents = sample_latents(
-                batch_size=1,
-                model=diffusion_model,
-                model_kwargs=dict(texts=[prompt]),
-                guidance_scale=15.0,
-                progress=True,
-                device=device,
+        # Generate 3D model from text
+        mesh = text_to_3d(text_prompt)
+        
+        # Visualize and save
+        output_file, rendered_image = visualize_and_save(mesh, "obj")
+        
+        # Display rendered 3D model
+        st.image(rendered_image, caption="Generated 3D Model", use_column_width=True)
+        
+        # Provide download link
+        with open(output_file, "rb") as f:
+            st.download_button(
+                label="Download 3D Model (.obj)",
+                data=f,
+                file_name=output_file,
+                mime="application/octet-stream"
             )
-
-            latent = latents[0]
-            mesh = xm.decode_latent_mesh(latent).tri_mesh()
-
-            with tempfile.TemporaryDirectory() as tmpdir:
-                obj_path = os.path.join(tmpdir, "model.obj")
-                stl_path = os.path.join(tmpdir, "model.stl")
-
-                mesh.write_obj(obj_path)
-                mesh.write_stl(stl_path)
-
-                st.success("✅ 3D model generated!")
-
-                # Download links
-                st.download_button("⬇️ Download .OBJ", open(obj_path, "rb"), "model.obj")
-                st.download_button("⬇️ Download .STL", open(stl_path, "rb"), "model.stl")
-
-                # Step 2: Render preview images
-                st.subheader("🖼️ 3D Model Preview")
-                cameras = create_pan_cameras()
-                images = render_mesh(mesh, cameras=cameras, resolution=256)
-
-                for i, img in enumerate(images[:3]):
-                    st.image(img, caption=f"View {i + 1}", use_column_width=True)
-
-        except Exception as e:
-            st.error(f"❌ Error: {e}")
+        os.remove(output_file)  # Clean up
