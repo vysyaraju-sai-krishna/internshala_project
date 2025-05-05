@@ -4,7 +4,6 @@ numpy
 pillow
 pyyaml
 trimesh
-openai
 scipy
 scikit-image
 requests
