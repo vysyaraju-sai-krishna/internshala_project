@@ -16,4 +16,4 @@ This app takes a short text prompt and generates a downloadable 3D model (.obj) 
 - numpy
 
 ## Thought Process
-I chose Shap-E for its ability to convert text into 3D meshes. Streamlit was used for fast prototyping and interactivity.
+I choose Shap-E for its ability to convert text into 3D meshes. Streamlit was used for fast prototyping and interactivity.
