@@ -1,0 +1,14 @@
+streamlit
+torch
+numpy
+pillow
+pyyaml
+trimesh
+openai
+scipy
+scikit-image
+requests
+tqdm
+
+# OpenAI Shap-E library
+git+https://github.com/openai/shap-e.git
